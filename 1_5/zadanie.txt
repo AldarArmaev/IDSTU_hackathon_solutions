@@ -1,0 +1,54 @@
+Преобразование форматов данных
+Задача
+Реализовать преобразование табличных временных рядов между CSV, XLSX и
+JSON без изменения меток времени и числовых значений.
+
+Вход
+В рабочей папке лежат input.json и исходный файл:
+
+{
+  "source_format": "csv",
+  "target_format": "xlsx",
+  "source_file": "source.csv",
+  "delimiter": ","
+}
+source_file — имя файла рядом с input.json. delimiter используется
+и при чтении исходного CSV, и при записи output.csv; по умолчанию ,.
+Исходный JSON — объект с timestamps и values.
+
+Выход
+Нужно записать файл с точным именем в зависимости от target_format:
+
+target_format = "json" → output.json со структурой
+timestamps / values (ровно эти два поля);
+target_format = "csv" → output.csv с заголовком;
+target_format = "xlsx" → output.xlsx, один лист.
+Таблица CSV/XLSX: столбец timestamp и четыре числовых столбца
+temperature_c, pressure_mmhg, wind_speed_ms,
+relative_humidity_pct. Порядок столбцов не важен, лишние столбцы
+игнорируются. Пустая ячейка соответствует null.
+
+Поддержать шесть направлений: CSV→JSON, CSV→XLSX, XLSX→JSON, JSON→CSV,
+JSON→XLSX, XLSX→CSV.
+
+Метки времени — строки 2016-01-01T02:00:00; в XLSX допустимо хранить
+их как дату/время или как строку. Часовой пояс не менять, Z не
+добавлять.
+
+Пример CSV → JSON
+source.csv:
+
+timestamp;temperature_c;pressure_mmhg;wind_speed_ms;relative_humidity_pct
+2016-01-01T02:00:00;2.5;;1.0;80
+При delimiter: ";" результат:
+
+{
+  "timestamps": ["2016-01-01T02:00:00"],
+  "values": {
+    "temperature_c": [2.5],
+    "pressure_mmhg": [null],
+    "wind_speed_ms": [1.0],
+    "relative_humidity_pct": [80.0]
+  }
+}
+В архиве — папки с input.json, исходным файлом и expected.json.

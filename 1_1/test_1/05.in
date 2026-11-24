@@ -1,0 +1,11 @@
+{
+  "dataset": {
+    "timestamps": ["2016-01-02T02:00:00", "2016-01-02T02:00:00", "2016-01-02T02:00:00", "2016-01-02T05:00:00"],
+    "values": {
+      "temperature_c": [null,null,null,null],
+      "relative_humidity_pct": [80.0,81.0,82.0,83.0]
+    }
+  },
+  "method": "check",
+  "parameters": {}
+}

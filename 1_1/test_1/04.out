@@ -1,0 +1,8 @@
+{
+  "missing_values": {
+    "temperature_c": [1],
+    "wind_speed_ms": [2,3]
+  },
+  "duplicate_timestamp_indices": [2],
+  "timestamps_out_of_order_indices": [2,3]
+}

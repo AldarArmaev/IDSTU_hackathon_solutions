@@ -1,0 +1,49 @@
+Нормализация временного ряда
+Задача
+Преобразовать масштаб числовых переменных, не меняя временные метки.
+
+Вход
+{
+  "dataset": {
+    "timestamps": [
+      "2016-01-01T02:00:00",
+      "2016-01-01T05:00:00",
+      "2016-01-01T08:00:00"
+    ],
+    "values": {
+      "temperature_c": [4.0, null, 4.0],
+      "wind_speed_ms": [null, null, null],
+      "relative_humidity_pct": [2.0, 4.0, 6.0]
+    }
+  },
+  "method": "minmax",
+  "parameters": {}
+}
+Методы
+method	Правило	parameters
+minmax	(x − min) / (max − min)	{}
+zscore	(x − μ) / σ, ddof=0	{}
+scale	x · k	{"coefficient": 2}
+Статистики считаются по каждой переменной независимо; null
+исключается из расчёта и остаётся null в результате.
+parameters.coefficient обязателен для scale; без него —
+{"status":"error","message":"format data error"}.
+Постоянная переменная (max = min или σ = 0), включая одиночное
+значение: все непустые элементы → 0.
+Полностью пустая переменная: все элементы остаются null.
+Выход
+Ответ — объект ровно с timestamps и values:
+
+{
+  "timestamps": [
+    "2016-01-01T02:00:00",
+    "2016-01-01T05:00:00",
+    "2016-01-01T08:00:00"
+  ],
+  "values": {
+    "temperature_c": [0.0, null, 0.0],
+    "wind_speed_ms": [null, null, null],
+    "relative_humidity_pct": [0.0, 0.5, 1.0]
+  }
+}
+Все переменные входа присутствуют.

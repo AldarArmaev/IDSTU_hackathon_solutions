@@ -1,0 +1,5 @@
+{
+  "missing_values": {},
+  "duplicate_timestamp_indices": [],
+  "timestamps_out_of_order_indices": [1,3]
+}

@@ -1,0 +1,7 @@
+{
+  "missing_values": {
+    "temperature_c": [0,1,2,3]
+  },
+  "duplicate_timestamp_indices": [1,2],
+  "timestamps_out_of_order_indices": []
+}

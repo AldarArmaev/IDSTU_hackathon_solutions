@@ -1,0 +1,8 @@
+{
+  "missing_values": {
+    "temperature_c": [3],
+    "relative_humidity_pct": [11]
+  },
+  "duplicate_timestamp_indices": [5],
+  "timestamps_out_of_order_indices": [21]
+}

@@ -1,0 +1,273 @@
+Заключительный проект
+Цель
+Собрать один воспроизводимый HTTP-сервис, который реализует пять
+модулей: проверку качества, заполнение пропусков, агрегирование,
+нормализацию и преобразование форматов. Это не набор отдельных
+solution.py, а сервис, который можно запустить и опросить.
+
+Можно переиспользовать код задач первого уровня; итоговая сдача должна
+быть HTTP-приложением.
+
+Что сдаётся
+ZIP-архив с проектом:
+
+app/                  # код, точка входа app/main.py
+tests/                # pytest-тесты
+README.md             # запуск, API, примеры
+requirements.txt      # зависимости; версия Python — комментарием
+REPORT.md             # что сделано и что ограничено
+examples/             # примеры curl/requests (по желанию)
+Dockerfile            # по желанию
+Не включайте myenv/, .venv/, __pycache__/, большие данные и
+секреты. Архив — до 10 МБ. Ссылка на GitHub не принимается: нужен
+ZIP.
+
+Обязательный стек
+Python 3.11+; проверяющий запускает проект на Python 3.12;
+FastAPI;
+Uvicorn;
+Pydantic;
+любые другие пакеты с PyPI — по необходимости; версии фиксируйте
+в requirements.txt;
+Pytest или аналогичные тесты.
+Версию Python в requirements.txt указывайте комментарием, например
+# requires-python >= 3.12.
+
+Архитектура
+Один репозиторий, один запускаемый FastAPI-сервис. Внутри — пять
+независимых модулей (пакетов):
+
+quality — проверка качества;
+imputation — заполнение пропусков;
+aggregation — агрегирование;
+normalization — нормализация;
+formats — преобразование форматов.
+Публичных маршрутов два: POST /api/v1/process и
+POST /api/v1/convert. Служебные — GET /health, GET /docs,
+GET /openapi.json.
+
+Единый формат данных
+Все вычислительные методы принимают и возвращают:
+
+{
+  "timestamps": ["2016-01-01T02:00:00", "2016-01-01T05:00:00"],
+  "values": {
+    "temperature_c": [-19.0, null],
+    "wind_speed_ms": [1.0, 2.0]
+  }
+}
+Требования:
+
+timestamps — строки строго вида YYYY-MM-DDTHH:MM:SS, местное
+время, без Z, долей секунды и смещения;
+values — именованные числовые ряды;
+длины всех массивов равны длине timestamps;
+пропуск — null;
+исходные метки и известные значения не изменяются без необходимости.
+API
+Маршрут	Назначение
+GET /health	ровно {"status":"ok"}
+POST /api/v1/process	проверка, заполнение, агрегирование, нормализация
+POST /api/v1/convert	CSV ↔ XLSX ↔ JSON
+GET /docs	Swagger UI
+GET /openapi.json	OpenAPI-схема
+POST /api/v1/process
+Запрос:
+
+{
+  "dataset": {
+    "timestamps": ["2016-01-01T02:00:00", "2016-01-01T05:00:00"],
+    "values": {"temperature_c": [null, -15.1]}
+  },
+  "method": "constant",
+  "parameters": {"value": 0}
+}
+Ответ 200:
+
+{
+  "dataset": {
+    "timestamps": ["2016-01-01T02:00:00", "2016-01-01T05:00:00"],
+    "values": {"temperature_c": [0.0, -15.1]}
+  },
+  "report": {"filled_values": 1, "remaining_nulls": 0},
+  "warnings": []
+}
+parameters необязателен; {} допустим. Значения по умолчанию:
+value = 0, interval = "1d", coefficient = 1.
+method — в нижнем регистре; неизвестный метод — 400/422.
+
+parameters.variables — необязательный список имён:
+
+поля нет — обрабатываются все переменные;
+пустой список — ни одна;
+неизвестное имя — ошибка 400/422.
+Если опорной точки нет (ffill в начале, bfill в конце, linear на
+краю), значение остаётся null, а в warnings добавляется объект:
+
+{"method": "ffill", "variable": "temperature_c", "index": 0, "reason": "no_previous_value"}
+Для bfill — "no_next_value", для linear — "no_reference_point".
+warnings — всегда список объектов, не строк.
+
+Обязательные методы:
+
+method	Параметры	Что делает
+check	{}	находит пропуски, повторы меток и нарушение порядка
+constant	{"value": число}	заменяет null константой
+ffill	{}	заполняет последним известным значением
+bfill	{}	заполняет ближайшим будущим значением
+linear	{}	линейная интерполяция по времени
+mean	{"interval":"1d"}	среднее по интервалу
+min	{"interval":"1d"}	минимум по интервалу
+max	{"interval":"1d"}	максимум по интервалу
+sum	{"interval":"1d"}	сумма по интервалу
+minmax	{}	(x-min)/(max-min)
+zscore	{}	(x-μ)/σ, ddof=0
+scale	{"coefficient": число}	x*k
+Формат report
+report — всегда объект. Ниже — обязательный минимум; дополнительные
+поля допустимы, если обязательные присутствуют.
+
+Группа методов	Что вернуть в report
+check	issues — список найденных проблем
+constant, ffill, bfill, linear	filled_values, remaining_nulls
+mean, min, max, sum	method, interval, rows
+minmax, zscore, scale	method и статистика/коэффициент
+конвертация в JSON	rows, target_format
+check
+{
+  "issues": [
+    {"type": "missing", "variable": "temperature_c", "index": 3},
+    {"type": "duplicate", "index": 5},
+    {"type": "out_of_order", "index": 21}
+  ]
+}
+dataset в ответе — исходный, без изменений.
+
+Поле уровня 1	Куда попадает
+missing_values	issues с type="missing"
+duplicate_timestamp_indices	type="duplicate"
+timestamps_out_of_order_indices	type="out_of_order"
+Заполнение пропусков
+{"filled_values": 3, "remaining_nulls": 1}
+Агрегирование
+{"method": "mean", "interval": "1d", "rows": 4}
+Нормализация
+Статистики считаются по каждой переменной отдельно.
+
+method	Пример report
+minmax	{"method": "minmax", "statistics": {"temperature_c": {"min": -32.0, "max": -13.0}}}
+zscore	{"method": "zscore", "statistics": {"temperature_c": {"mean": -23.0, "std": 5.5}}}
+scale	{"method": "scale", "coefficient": 2}
+Конвертация в JSON
+{"rows": 32, "target_format": "json"}
+POST /api/v1/convert
+multipart/form-data:
+
+file — исходный CSV/XLSX/JSON;
+target_format — csv, xlsx или json (нижний регистр);
+delimiter — необязательный разделитель CSV.
+Исходный формат определяется по расширению файла; неизвестное
+расширение — 400.
+
+target_format="json" → 200
+{"dataset": {"timestamps": ..., "values": ...}, "report": {"rows": N, "target_format": "json"}};
+target_format="csv" → файл output.csv, text/csv,
+Content-Disposition: attachment;
+target_format="xlsx" → файл output.xlsx,
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.
+delimiter используется и при чтении CSV, и при записи output.csv.
+CSV — UTF-8, заголовок timestamp и четыре числовых столбца
+temperature_c, pressure_mmhg, wind_speed_ms,
+relative_humidity_pct. Порядок столбцов не важен, лишние
+игнорируются. Пустая ячейка = null. XLSX — один лист; метки можно
+хранить датой/временем или строкой.
+
+Поддержать все шесть направлений: CSV→XLSX, CSV→JSON, XLSX→CSV,
+XLSX→JSON, JSON→CSV, JSON→XLSX. TXT и Parquet — необязательны.
+
+Ошибки и валидация
+422 — ошибка схемы (Pydantic);
+400 — семантическая ошибка: неизвестный method, неверный
+target_format, нет файла, неподдерживаемое расширение.
+Тело ошибки — {"detail": "..."}. В HTTP-версии объект
+{"status": "error", "message": ...} не используется. Ошибка 500 без
+объяснения запрещена.
+
+Тесты
+В проекте должны быть автоматизированные тесты (pytest):
+
+хотя бы один тест на каждый обязательный метод;
+один тест на некорректный запрос;
+один пограничный случай (все null, постоянная переменная, пропуск
+на краю);
+проверка /health, /docs или OpenAPI;
+проверка хотя бы одного преобразования форматов.
+Тесты не должны требовать сети и запущенного сервера — используйте
+TestClient. Запуск:
+
+pytest -q
+Дробные числа сравниваются с допуском 1e-6.
+
+README и отчёт
+README.md:
+
+что реализовано;
+структура проекта;
+установка и точная команда запуска;
+таблица методов и параметров;
+примеры запросов/ответов;
+как запустить тесты;
+известные ограничения.
+REPORT.md:
+
+какие методы и форматы реализованы;
+что взято из задач первого уровня;
+что не реализовано и почему;
+результаты тестов.
+Запуск
+Проект должен запускаться в чистом окружении без ручных правок:
+
+python -m venv .venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows:
+# .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+Команда запуска должна быть указана в README. Пример выше — для
+app/main.py с объектом app. Если в архиве есть compose-файл, можно
+запускать docker compose up; без него эта команда не требуется.
+
+Проверка:
+
+curl http://127.0.0.1:8000/health
+Сервис работает автономно: без внешних БД, сетевых вызовов и секретов.
+Все данные — в памяти или в файлах. Тесты не требуют сети.
+
+Оценка
+Критерий	Баллы
+Пять модулей и обязательные методы	30
+Корректность вычислений и форматов	20
+Валидация, ошибки 400/422, warnings	15
+Тесты pytest	15
+README, примеры, OpenAPI	10
+Структура и читаемость кода	5
+Защита проекта	5
+Частичная реализация оценивается пропорционально. Проект только с
+файловым вводом-выводом без HTTP — неполный.
+
+Защита
+Короткая демонстрация: запуск, /docs, 2–3 запроса, тесты и ответы на
+вопросы по алгоритмам. Организатор вправе попросить объяснить любой
+метод или изменить входные данные.
+
+Чек-лист перед сдачей
+[ ] GET /health возвращает {"status":"ok"}.
+[ ] /docs открывается.
+[ ] Все обязательные методы из таблицы работают.
+[ ] Все шесть направлений форматов работают.
+[ ] Ошибки возвращают 400/422 с detail.
+[ ] pytest -q проходит без сети.
+[ ] README позволяет запустить проект с нуля.
+[ ] В архиве нет myenv/, .venv/, __pycache__/ и секретов.
+[ ] Архив не больше 10 МБ.
